@@ -1,0 +1,6 @@
+{
+  "name": "FluxoFlow - Painel Financeiro Sankey",
+  "description": "Painel financeiro interativo de fluxo de caixa com diagrama de Sankey em tempo real, controles macro de receitas e micro de despesas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
