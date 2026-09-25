@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { IncomeItem, ExpenseItem, SelectedNodeDetail } from '../types/finance';
-import { formatBRL, formatPercent } from '../utils/formatters';
+import { formatBRL, formatPrivacyBRL, formatPercent, maskName } from '../utils/formatters';
 import { Sparkles, Info, Eye, Layers, MousePointerClick, ChevronRight, Activity } from 'lucide-react';
 
 interface SankeyDiagramProps {
   incomes: IncomeItem[];
   expenses: ExpenseItem[];
+  isPrivacyMode?: boolean;
+  hideItemNames?: boolean;
   onSelectNode: (detail: SelectedNodeDetail) => void;
 }
 
@@ -44,6 +46,8 @@ interface ComputedLink {
 export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
   incomes,
   expenses,
+  isPrivacyMode = false,
+  hideItemNames = false,
   onSelectNode,
 }) => {
   const [hoveredLink, setHoveredLink] = useState<ComputedLink | null>(null);
@@ -413,6 +417,8 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
         finalAdjustment: rawExp.finalAdjustment,
         notes: rawExp.notes,
         installmentHistory: rawExp.installmentHistory,
+        attachmentUrl: rawExp.attachmentUrl,
+        attachmentName: rawExp.attachmentName,
       });
     }
   };
@@ -457,6 +463,8 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
         finalAdjustment: rawExp.finalAdjustment,
         notes: rawExp.notes,
         installmentHistory: rawExp.installmentHistory,
+        attachmentUrl: rawExp.attachmentUrl,
+        attachmentName: rawExp.attachmentName,
       });
     }
   };
@@ -474,7 +482,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+              <h2 className="text-base sm:text-lg font-bold tracking-tight">
                 Diagrama de Fluxo de Caixa (Sankey 3D & Glow)
               </h2>
               {isDeficit ? (
@@ -622,6 +630,9 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
               const isLeft = node.column === 'left';
               const isRight = node.column === 'right';
 
+              const displayLabel = maskName(node.label, hideItemNames);
+              const displayVal = formatPrivacyBRL(node.value, isPrivacyMode);
+
               return (
                 <g
                   key={node.id}
@@ -652,17 +663,17 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
                     <g transform={`translate(${node.x + node.width + 12}, ${node.y + node.height / 2})`}>
                       <text
                         y={-3}
-                        className="fill-white text-[12px] font-semibold leading-none select-none tracking-tight group-hover:fill-sky-400 transition-colors"
+                        className="fill-current text-[12px] font-semibold leading-none select-none tracking-tight group-hover:fill-sky-400 transition-colors"
                         dominantBaseline="central"
                       >
-                        {node.label}
+                        {displayLabel}
                       </text>
                       <text
                         y={13}
                         className="fill-neutral-400 text-[11px] font-mono tabular-nums leading-none select-none"
                         dominantBaseline="central"
                       >
-                        {formatBRL(node.value)} · {formatPercent(node.percentage)}
+                        {displayVal} {isPrivacyMode ? '' : `· ${formatPercent(node.percentage)}`}
                       </text>
                     </g>
                   )}
@@ -672,9 +683,9 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
                     <g transform={`translate(${node.x + node.width / 2}, ${node.y - 12})`}>
                       <text
                         textAnchor="middle"
-                        className="fill-white text-[13px] font-black font-mono tracking-tight select-none"
+                        className="fill-current text-[13px] font-black font-mono tracking-tight select-none"
                       >
-                        {formatBRL(node.value)}
+                        {displayVal}
                       </text>
                     </g>
                   )}
@@ -686,11 +697,11 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
                         textAnchor="end"
                         y={-3}
                         className={`text-[12px] font-semibold leading-none select-none tracking-tight group-hover:fill-sky-400 transition-colors ${
-                          node.isSurplus ? 'fill-emerald-400 font-bold' : 'fill-white'
+                          node.isSurplus ? 'fill-emerald-400 font-bold' : 'fill-current'
                         }`}
                         dominantBaseline="central"
                       >
-                        {node.label}
+                        {displayLabel}
                       </text>
                       <text
                         textAnchor="end"
@@ -700,7 +711,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
                         }`}
                         dominantBaseline="central"
                       >
-                        {formatBRL(node.value)} · {formatPercent(node.percentage)}
+                        {displayVal} {isPrivacyMode ? '' : `· ${formatPercent(node.percentage)}`}
                       </text>
                     </g>
                   )}
@@ -713,7 +724,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
         {/* Floating Tooltip with Smooth Positioning */}
         {(hoveredLink || hoveredNode) && (
           <div
-            className="absolute z-30 pointer-events-none transition-all duration-75 px-3.5 py-2.5 rounded-xl bg-[#0F1115]/95 backdrop-blur-md border border-white/10 shadow-2xl text-xs max-w-xs"
+            className="absolute z-30 pointer-events-none transition-all duration-75 px-3.5 py-2.5 rounded-xl bg-[#0F1115]/95 backdrop-blur-md border border-white/10 shadow-2xl text-xs max-w-xs text-white"
             style={{
               left: `${Math.min(mousePos.x + 15, (containerRef.current?.clientWidth || 900) - 230)}px`,
               top: `${Math.max(10, mousePos.y - 45)}px`,
@@ -726,19 +737,25 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
                     className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: hoveredLink.sourceColor }}
                   />
-                  <span className="truncate max-w-[95px]">{hoveredLink.sourceLabel}</span>
+                  <span className="truncate max-w-[95px]">
+                    {maskName(hoveredLink.sourceLabel, hideItemNames)}
+                  </span>
                   <span className="text-neutral-500">➔</span>
                   <span
                     className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: hoveredLink.targetColor }}
                   />
-                  <span className="truncate max-w-[95px]">{hoveredLink.targetLabel}</span>
+                  <span className="truncate max-w-[95px]">
+                    {maskName(hoveredLink.targetLabel, hideItemNames)}
+                  </span>
                 </div>
                 <div className="text-sm font-bold font-mono text-white flex items-center justify-between gap-3 pt-0.5">
-                  <span>{formatBRL(hoveredLink.value)}</span>
-                  <span className="text-sky-400 text-xs font-normal">
-                    {formatPercent(hoveredLink.percentageOfTotal)} do fluxo
-                  </span>
+                  <span>{formatPrivacyBRL(hoveredLink.value, isPrivacyMode)}</span>
+                  {!isPrivacyMode && (
+                    <span className="text-sky-400 text-xs font-normal">
+                      {formatPercent(hoveredLink.percentageOfTotal)} do fluxo
+                    </span>
+                  )}
                 </div>
                 <div className="text-[10px] text-neutral-400 flex items-center gap-1 pt-0.5">
                   <MousePointerClick className="w-3 h-3 text-sky-400" />
@@ -754,13 +771,17 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
                     className="w-3 h-3 rounded-md shrink-0 shadow-sm"
                     style={{ backgroundColor: hoveredNode.color }}
                   />
-                  <span className="font-bold text-white">{hoveredNode.label}</span>
+                  <span className="font-bold text-white">
+                    {maskName(hoveredNode.label, hideItemNames)}
+                  </span>
                 </div>
                 <div className="text-sm font-bold font-mono text-white flex items-center justify-between gap-3 pt-0.5">
-                  <span>{formatBRL(hoveredNode.value)}</span>
-                  <span className="text-neutral-400 text-xs font-normal">
-                    {formatPercent(hoveredNode.percentage)} do total
-                  </span>
+                  <span>{formatPrivacyBRL(hoveredNode.value, isPrivacyMode)}</span>
+                  {!isPrivacyMode && (
+                    <span className="text-neutral-400 text-xs font-normal">
+                      {formatPercent(hoveredNode.percentage)} do total
+                    </span>
+                  )}
                 </div>
                 <div className="text-[10px] text-neutral-400 flex items-center gap-1 pt-0.5">
                   <MousePointerClick className="w-3 h-3 text-sky-400" />
@@ -779,11 +800,11 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
           <span>
             {isDeficit ? (
               <span className="text-rose-400 font-semibold">
-                Alerta de Caixa: As saídas ultrapassam as entradas em {formatBRL(deficitAmount)}.
+                Alerta de Caixa: As saídas ultrapassam as entradas em {formatPrivacyBRL(deficitAmount, isPrivacyMode)}.
               </span>
             ) : surplusAmount > 0 ? (
               <span className="text-emerald-400 font-medium">
-                Fluxo Saudável: Saldo positivo livre de {formatBRL(surplusAmount)} para aportes ou investimentos.
+                Fluxo Saudável: Saldo positivo livre de {formatPrivacyBRL(surplusAmount, isPrivacyMode)} para aportes ou investimentos.
               </span>
             ) : (
               <span className="text-neutral-300">

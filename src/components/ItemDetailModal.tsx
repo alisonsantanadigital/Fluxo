@@ -9,7 +9,7 @@ import {
   FinalAdjustmentOption,
   InstallmentMonthRecord,
 } from '../types/finance';
-import { formatBRL, formatPercent } from '../utils/formatters';
+import { formatBRL, formatPrivacyBRL, formatPercent, maskName } from '../utils/formatters';
 import { PALETTE_OPTIONS } from '../utils/constants';
 import { evaluateDueDate } from '../utils/dateHelpers';
 import { SmartInstallmentForm, SmartInstallmentFormData } from './SmartInstallmentForm';
@@ -45,6 +45,8 @@ interface ItemDetailModalProps {
   detail: SelectedNodeDetail | null;
   allExpenses?: ExpenseItem[];
   totalExpense?: number;
+  isPrivacyMode?: boolean;
+  hideItemNames?: boolean;
   onClose: () => void;
   onUpdateIncome?: (id: string, updates: Partial<IncomeItem>) => void;
   onUpdateExpense?: (id: string, updates: Partial<ExpenseItem>) => void;
@@ -56,6 +58,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   detail,
   allExpenses = [],
   totalExpense = 0,
+  isPrivacyMode = false,
+  hideItemNames = false,
   onClose,
   onUpdateIncome,
   onUpdateExpense,
@@ -258,8 +262,11 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <div className="flex items-center gap-2 mt-1">
                   <input
                     type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={hideItemNames ? maskName(name, true) : name}
+                    readOnly={hideItemNames}
+                    onChange={(e) => {
+                      if (!hideItemNames) setName(e.target.value);
+                    }}
                     className="text-lg sm:text-xl font-bold text-white bg-transparent border-b border-white/10 focus:border-sky-400 focus:outline-none w-full"
                     placeholder="Nome do lançamento..."
                   />
@@ -286,8 +293,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             <span className="text-xs text-neutral-400 block mb-1">
               {isExpense ? 'Desembolso Mensal no Caixa:' : 'Valor do Lançamento:'}
             </span>
-            <span className="text-2xl sm:text-3xl font-black font-mono text-white tracking-tight tabular-nums">
-              {formatBRL(displayAmount)}
+            <span className={`text-2xl sm:text-3xl font-black font-mono text-white tracking-tight tabular-nums ${isPrivacyMode ? 'privacy-masked-text select-none' : ''}`}>
+              {isPrivacyMode ? 'R$ ••••••' : formatBRL(displayAmount)}
             </span>
             {isPostponed && (
               <span className="text-[11px] text-indigo-400 font-bold block mt-1">

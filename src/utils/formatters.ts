@@ -1,11 +1,31 @@
 export function formatBRL(value: number, includeDecimals = false): string {
   if (isNaN(value)) return 'R$ 0';
-  return new Intl.NumberFormat('pt-BR', {
+  const isNegative = value < 0;
+  const absValue = Math.abs(value);
+  const formatted = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
     minimumFractionDigits: includeDecimals ? 2 : 0,
     maximumFractionDigits: includeDecimals ? 2 : 0,
-  }).format(value);
+  }).format(absValue);
+
+  if (isNegative) {
+    return `- ${formatted}`;
+  }
+  return formatted;
+}
+
+export function formatPrivacyBRL(value: number, isPrivacyMode: boolean, includeDecimals = false): string {
+  if (isPrivacyMode) {
+    return 'R$ ••••••';
+  }
+  return formatBRL(value, includeDecimals);
+}
+
+export function maskName(name: string, hideNames: boolean): string {
+  if (!hideNames || !name) return name;
+  if (name.length <= 3) return '•••';
+  return `${name[0]}••••${name[name.length - 1]}`;
 }
 
 export function formatCompactBRL(value: number): string {

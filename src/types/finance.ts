@@ -12,6 +12,30 @@ export type InterestRateType = 'monthly_percent' | 'yearly_percent' | 'fixed_val
 export type InterestApplicationMethod = 'simple' | 'compound';
 export type FinalAdjustmentOption = 'adjust_last' | 'recalculate_months';
 
+export type AppTheme = 'dark' | 'light' | 'neon';
+export type ExpenseViewMode = 'grid' | 'table' | 'icons';
+
+export interface FutureIncomeItem {
+  id: string;
+  name: string;
+  amount: number;
+  expectedDate: string; // Ex: "2026-10-15" ou "15/10/2026"
+  category?: string; // Salário, Freelance, Venda, Aluguel, Reembolso, Investimento, etc.
+  notes?: string;
+  payerOrSource?: string;
+  status: 'pending' | 'received'; // Se for recebida, pode ser somada no caixa
+  receivedDate?: string;
+}
+
+export interface FamilyVaultState {
+  vaultId: string;
+  vaultName: string;
+  isCloudConnected: boolean;
+  isSyncing: boolean;
+  lastSyncTime: string | null;
+  syncError: string | null;
+}
+
 export interface InterestConfig {
   enabled: boolean;
   rateType: InterestRateType; // % a.m., % a.a. ou R$ fixo
@@ -68,6 +92,9 @@ export interface ExpenseItem {
   finalAdjustment?: FinalAdjustmentOption;
   notes?: string;
   installmentHistory?: InstallmentMonthRecord[]; // Histórico detalhado mês a mês
+  // Anexo de Comprovante / Foto
+  attachmentUrl?: string;
+  attachmentName?: string;
 }
 
 export interface Scenario {
@@ -104,6 +131,8 @@ export interface SelectedNodeDetail {
   finalAdjustment?: FinalAdjustmentOption;
   notes?: string;
   installmentHistory?: InstallmentMonthRecord[];
+  attachmentUrl?: string;
+  attachmentName?: string;
 }
 
 export interface SecurityConfirmationAction {

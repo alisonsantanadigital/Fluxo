@@ -8,6 +8,7 @@ interface AnimatedCounterProps {
   prefix?: string;
   suffix?: string;
   className?: string;
+  isPrivacyMode?: boolean;
 }
 
 export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
@@ -17,6 +18,7 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
   prefix = '',
   suffix = '',
   className = '',
+  isPrivacyMode = false,
 }) => {
   const [displayValue, setDisplayValue] = useState(value);
 
@@ -46,6 +48,14 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
     const frameId = requestAnimationFrame(updateCounter);
     return () => cancelAnimationFrame(frameId);
   }, [value, duration]);
+
+  if (isPrivacyMode) {
+    return (
+      <span className={`tabular-nums font-mono tracking-wider ${className}`}>
+        {formatAsCurrency ? 'R$ ••••••' : '••••••'}
+      </span>
+    );
+  }
 
   const formatted = formatAsCurrency
     ? formatBRL(Math.round(displayValue))

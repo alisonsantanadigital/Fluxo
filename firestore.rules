@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Health check test connection document
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // 3. Shared family finance vault for spouses across multiple devices
+    match /family_finances/{householdId} {
+      allow read: if householdId is string && householdId.size() <= 128;
+      allow create, update: if householdId is string && householdId.size() <= 128
+        && request.resource.data.householdName is string
+        && request.resource.data.householdName.size() <= 100;
+      allow delete: if false;
+    }
+  }
+}

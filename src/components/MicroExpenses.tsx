@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   ExpenseItem,
   SelectedNodeDetail,
   PriorityLevel,
   PaymentType,
-  SecurityConfirmationAction
+  SecurityConfirmationAction,
+  ExpenseViewMode
 } from '../types/finance';
-import { formatBRL, formatPercent } from '../utils/formatters';
+import { formatBRL, formatPrivacyBRL, formatPercent, maskName } from '../utils/formatters';
 import { PALETTE_OPTIONS } from '../utils/constants';
 import { evaluateDueDate } from '../utils/dateHelpers';
 import { SmartInstallmentForm, SmartInstallmentFormData } from './SmartInstallmentForm';
@@ -37,13 +38,24 @@ import {
   Pencil,
   Check,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  LayoutGrid,
+  List,
+  Monitor,
+  AppWindow,
+  Upload,
+  Paperclip,
+  Maximize2,
+  FileText,
+  X
 } from 'lucide-react';
 
 interface MicroExpensesProps {
   expenses: ExpenseItem[];
   totalIncome: number;
   totalExpense: number;
+  isPrivacyMode?: boolean;
+  hideItemNames?: boolean;
   onUpdateExpense: (id: string, updates: Partial<ExpenseItem>) => void;
   onAddExpense: (item: Omit<ExpenseItem, 'id'>) => void;
   onRemoveExpense: (id: string) => void;
@@ -57,6 +69,8 @@ export const MicroExpenses: React.FC<MicroExpensesProps> = ({
   expenses,
   totalIncome,
   totalExpense,
+  isPrivacyMode = false,
+  hideItemNames = false,
   onUpdateExpense,
   onAddExpense,
   onRemoveExpense,
@@ -65,6 +79,11 @@ export const MicroExpenses: React.FC<MicroExpensesProps> = ({
   onRequestSecurityConfirm,
   onResetDefaults,
 }) => {
+  const [viewMode, setViewMode] = useState<ExpenseViewMode>('grid');
+  const [previewAttachment, setPreviewAttachment] = useState<{ url: string; title: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeUploadExpenseId, setActiveUploadExpenseId] = useState<string | null>(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'fixed' | 'installment'>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
@@ -73,6 +92,36 @@ export const MicroExpenses: React.FC<MicroExpensesProps> = ({
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
+
+  // File upload trigger
+  const handleTriggerUpload = (expenseId: string) => {
+    setActiveUploadExpenseId(expenseId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && activeUploadExpenseId) {
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const dataUrl = loadEvent.target?.result as string;
+        onUpdateExpense(activeUploadExpenseId, {
+          attachmentUrl: dataUrl,
+          attachmentName: file.name,
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+    if (e.target) e.target.value = '';
+    setActiveUploadExpenseId(null);
+  };
+
+  const handleRemoveAttachment = (expenseId: string) => {
+    onUpdateExpense(expenseId, {
+      attachmentUrl: undefined,
+      attachmentName: undefined,
+    });
+  };
 
   // New expense form state
   const [newName, setNewName] = useState('');
@@ -411,344 +460,777 @@ export const MicroExpenses: React.FC<MicroExpensesProps> = ({
           </div>
         </div>
 
-        {/* Second Row: Date Status Filter & Priority Filter */}
-        <div className="flex flex-wrap items-center gap-3 pt-1 text-xs border-t border-white/[0.05]">
-          {/* Date Status Filter (🔴🔵🟢) */}
-          <div className="flex items-center gap-1 bg-[#0F1115] p-1 rounded-lg border border-white/[0.08]">
-            <span className="text-[10px] text-neutral-500 px-1 font-mono uppercase font-bold">Vencimento:</span>
-            <button
-              onClick={() => setDateStatusFilter('all')}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                dateStatusFilter === 'all' ? 'bg-white/15 text-white font-bold' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setDateStatusFilter('overdue')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
-                dateStatusFilter === 'overdue' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-              🔴 Vencidos
-            </button>
-            <button
-              onClick={() => setDateStatusFilter('due_soon')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
-                dateStatusFilter === 'due_soon' ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-              🔵 Em 7 Dias
-            </button>
-            <button
-              onClick={() => setDateStatusFilter('on_time')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
-                dateStatusFilter === 'on_time' ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              🟢 Em Dia / Pagos
-            </button>
+        {/* Second Row: Date Status Filter, Priority Filter & View Mode Switcher */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs border-t border-white/[0.05]">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Date Status Filter (🔴🔵🟢) */}
+            <div className="flex items-center gap-1 bg-[#0F1115] p-1 rounded-lg border border-white/[0.08]">
+              <span className="text-[10px] text-neutral-500 px-1 font-mono uppercase font-bold">Vencimento:</span>
+              <button
+                onClick={() => setDateStatusFilter('all')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                  dateStatusFilter === 'all' ? 'bg-white/15 text-white font-bold' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setDateStatusFilter('overdue')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                  dateStatusFilter === 'overdue' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                🔴 Vencidos
+              </button>
+              <button
+                onClick={() => setDateStatusFilter('due_soon')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                  dateStatusFilter === 'due_soon' ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                🔵 Em 7 Dias
+              </button>
+              <button
+                onClick={() => setDateStatusFilter('on_time')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                  dateStatusFilter === 'on_time' ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                🟢 Em Dia / Pagos
+              </button>
+            </div>
+
+            {/* Priority Filter */}
+            <div className="flex items-center gap-1 bg-[#0F1115] p-1 rounded-lg border border-white/[0.08]">
+              <span className="text-[10px] text-neutral-500 px-1 font-mono uppercase font-bold">Urgência:</span>
+              <button
+                onClick={() => setPriorityFilter('all')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                  priorityFilter === 'all' ? 'bg-white/15 text-white font-bold' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                Todas
+              </button>
+              <button
+                onClick={() => setPriorityFilter('high')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                  priorityFilter === 'high' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                🔴 Alta
+              </button>
+              <button
+                onClick={() => setPriorityFilter('medium')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                  priorityFilter === 'medium' ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                🟡 Média
+              </button>
+              <button
+                onClick={() => setPriorityFilter('low')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                  priorityFilter === 'low' ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                🟢 Baixa
+              </button>
+            </div>
           </div>
 
-          {/* Priority Filter */}
-          <div className="flex items-center gap-1 bg-[#0F1115] p-1 rounded-lg border border-white/[0.08]">
-            <span className="text-[10px] text-neutral-500 px-1 font-mono uppercase font-bold">Urgência:</span>
+          {/* VIEW MODE SWITCHER: GRADE, LISTA, GALERIA */}
+          <div className="flex items-center gap-1 bg-[#0F1115] p-1 rounded-xl border border-white/10 shadow-inner">
             <button
-              onClick={() => setPriorityFilter('all')}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                priorityFilter === 'all' ? 'bg-white/15 text-white font-bold' : 'text-neutral-400 hover:text-white'
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white/20 text-white font-bold shadow-sm'
+                  : 'text-neutral-400 hover:text-white'
               }`}
+              title="Modo Grade (Cards 3D com sliders e controles)"
             >
-              Todas
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Grade</span>
             </button>
             <button
-              onClick={() => setPriorityFilter('high')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-                priorityFilter === 'high' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40' : 'text-neutral-400 hover:text-white'
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white/20 text-white font-bold shadow-sm'
+                  : 'text-neutral-400 hover:text-white'
               }`}
+              title="Modo Lista (Tabela compacta e ágil para dezenas de despesas)"
             >
-              🔴 Alta
+              <List className="w-3.5 h-3.5" />
+              <span>Lista</span>
             </button>
             <button
-              onClick={() => setPriorityFilter('medium')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-                priorityFilter === 'medium' ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40' : 'text-neutral-400 hover:text-white'
+              type="button"
+              onClick={() => setViewMode('icons')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'icons'
+                  ? 'bg-sky-500/25 text-sky-300 border border-sky-500/40 font-bold shadow-sm'
+                  : 'text-neutral-400 hover:text-white'
               }`}
+              title="Modo Ícones no PC (Visualização organizada como lista de ícones igual ao estilo do PC)"
             >
-              🟡 Média
-            </button>
-            <button
-              onClick={() => setPriorityFilter('low')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-                priorityFilter === 'low' ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              🟢 Baixa
+              <Monitor className="w-3.5 h-3.5 text-sky-400" />
+              <span>Ícones PC</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Grid of Micro Expense Cards (Strict 1 column on mobile, 2-3 columns on desktop) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredAndSortedExpenses.map((expense) => {
-          const pctOfIncome = totalIncome > 0 ? (expense.amount / totalIncome) * 100 : 0;
-          const isInstallment = expense.paymentType === 'installment';
-          const isPaid = expense.monthlyStatus === 'paid';
-          const isSettled = expense.debtStatus === 'settled';
-          const isPostponed = !!expense.isPostponed;
+      {/* Hidden File Input for Receipt Attachment Upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
 
-          // Date evaluation (🔴🔵🟢)
-          const dateEval = evaluateDueDate(expense.dueDateDay || 10, expense.monthlyStatus);
-          const isOverdue = dateEval.status === 'overdue' && !isPaid;
-          const isOnTimeToday = dateEval.status === 'on_time_today' && !isPaid;
+      {/* VIEW 1: GRID MODE (Cards 3D) */}
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredAndSortedExpenses.map((expense) => {
+            const pctOfIncome = totalIncome > 0 ? (expense.amount / totalIncome) * 100 : 0;
+            const isInstallment = expense.paymentType === 'installment';
+            const isPaid = expense.monthlyStatus === 'paid';
+            const isSettled = expense.debtStatus === 'settled';
+            const isPostponed = !!expense.isPostponed;
 
-          const remainingInstallments =
-            isInstallment && expense.totalInstallments && expense.currentInstallment
-              ? Math.max(0, expense.totalInstallments - expense.currentInstallment + 1)
-              : 0;
+            // Date evaluation (🔴🔵🟢)
+            const dateEval = evaluateDueDate(expense.dueDateDay || 10, expense.monthlyStatus);
+            const isOverdue = dateEval.status === 'overdue' && !isPaid;
+            const isOnTimeToday = dateEval.status === 'on_time_today' && !isPaid;
 
-          const totalLifetimeDebt = expense.installmentHistory
-            ? expense.installmentHistory.reduce((s, r) => s + r.balanceDue, 0)
-            : expense.totalDebt;
+            const remainingInstallments =
+              isInstallment && expense.totalInstallments && expense.currentInstallment
+                ? Math.max(0, expense.totalInstallments - expense.currentInstallment + 1)
+                : 0;
 
-          return (
-            <div
-              key={expense.id}
-              className={`rounded-xl p-4 transition-all duration-300 space-y-3 relative group glass-surface-interactive ${
-                isOverdue
-                  ? 'bg-[#181216] border-rose-500/60 glow-overdue'
-                  : isOnTimeToday
-                  ? 'bg-[#121815] border-emerald-500/60 glow-on-time-today'
-                  : isPaid
-                  ? 'bg-[#10141A] border-emerald-500/30 opacity-95'
-                  : 'bg-[#13161C]/90 border-white/[0.08]'
-              }`}
-            >
-              {/* Top Row: Date Status Badge 🔴🔵🟢 + Priority Badge */}
-              <div className="flex items-center justify-between gap-1.5">
-                {/* Due Date Indicator (🔴🔵🟢) */}
-                <div
-                  className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1.5 font-mono ${dateEval.colorClass.badge}`}
-                  title={`Vencimento: dia ${expense.dueDateDay || 10} do mês`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${dateEval.colorClass.dot} ${isOverdue ? 'animate-ping' : ''}`} />
-                  <span>{dateEval.label}</span>
-                </div>
+            const totalLifetimeDebt = expense.installmentHistory
+              ? expense.installmentHistory.reduce((s, r) => s + r.balanceDue, 0)
+              : expense.totalDebt;
 
-                {/* Priority Badge (Clickable to cycle) */}
-                <button
-                  type="button"
-                  onClick={() => handleCyclePriority(expense)}
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer flex items-center gap-1 ${
-                    expense.priority === 'high'
-                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
-                      : expense.priority === 'medium'
-                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
-                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
-                  }`}
-                  title="Clique para alternar o nível de urgência"
-                >
-                  <span>
-                    {expense.priority === 'high' ? '🔴 Alta' : expense.priority === 'medium' ? '🟡 Média' : '🟢 Baixa'}
-                  </span>
-                </button>
-              </div>
-
-              {/* Header: Color Dot + Free Name Editing + Delete Button */}
-              <div className="flex items-start justify-between gap-2 pt-1">
-                <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                  <span
-                    className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm ring-1 ring-white/10"
-                    style={{
-                      backgroundColor: expense.color,
-                      boxShadow: `0 0 10px ${expense.color}60`,
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={expense.name}
-                        onChange={(e) => onUpdateExpense(expense.id, { name: e.target.value })}
-                        className="bg-transparent text-sm font-bold text-white focus:outline-none focus:border-b focus:border-pink-400 border-b border-transparent transition-colors px-0 py-0.5 truncate w-full"
-                        placeholder="Nome da despesa..."
-                      />
-                      <Pencil className="w-3 h-3 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                      {expense.category && (
-                        <span className="text-[11px] text-neutral-400 font-medium truncate">
-                          {expense.category}
-                        </span>
-                      )}
-                      <span className="text-[10px] text-neutral-500 font-mono">
-                        · Dia {expense.dueDateDay || 10}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => handleDeleteExpense(expense)}
-                    className="text-neutral-500 hover:text-rose-400 p-1 rounded transition-colors cursor-pointer"
-                    title="Excluir Despesa"
+            return (
+              <div
+                key={expense.id}
+                className={`rounded-xl p-4 transition-all duration-300 space-y-3 relative group glass-surface-interactive ${
+                  isOverdue
+                    ? 'bg-[#181216] border-rose-500/60 glow-overdue'
+                    : isOnTimeToday
+                    ? 'bg-[#121815] border-emerald-500/60 glow-on-time-today'
+                    : isPaid
+                    ? 'bg-[#10141A] border-emerald-500/30 opacity-95'
+                    : 'bg-[#13161C]/90 border-white/[0.08]'
+                }`}
+              >
+                {/* Top Row: Date Status Badge 🔴🔵🟢 + Priority Badge */}
+                <div className="flex items-center justify-between gap-1.5">
+                  {/* Due Date Indicator (🔴🔵🟢) */}
+                  <div
+                    className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1.5 font-mono ${dateEval.colorClass.badge}`}
+                    title={`Vencimento: dia ${expense.dueDateDay || 10} do mês`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className={`w-1.5 h-1.5 rounded-full ${dateEval.colorClass.dot} ${isOverdue ? 'animate-ping' : ''}`} />
+                    <span>{dateEval.label}</span>
+                  </div>
+
+                  {/* Priority Badge (Clickable to cycle) */}
+                  <button
+                    type="button"
+                    onClick={() => handleCyclePriority(expense)}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer flex items-center gap-1 ${
+                      expense.priority === 'high'
+                        ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
+                        : expense.priority === 'medium'
+                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                        : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+                    }`}
+                    title="Clique para alternar o nível de urgência"
+                  >
+                    <span>
+                      {expense.priority === 'high' ? '🔴 Alta' : expense.priority === 'medium' ? '🟡 Média' : '🟢 Baixa'}
+                    </span>
                   </button>
                 </div>
-              </div>
 
-              {/* Installment Info Banner */}
-              {isInstallment && (
-                <div className="p-2.5 rounded-lg bg-[#0F1115] border border-amber-500/25 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-amber-300 font-bold flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-amber-400" />
-                      Parcela {expense.currentInstallment || 1} de {expense.totalInstallments || 7}
-                    </span>
-                    <span className="font-mono text-neutral-300 text-[11px]">
-                      Restam: <strong className="text-white">{remainingInstallments}x</strong>
-                    </span>
+                {/* Header: Color Dot + Free Name Editing + Delete Button */}
+                <div className="flex items-start justify-between gap-2 pt-1">
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <span
+                      className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm ring-1 ring-white/10"
+                      style={{
+                        backgroundColor: expense.color,
+                        boxShadow: `0 0 10px ${expense.color}60`,
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={hideItemNames ? maskName(expense.name, true) : expense.name}
+                          readOnly={hideItemNames}
+                          onChange={(e) => {
+                            if (!hideItemNames) {
+                              onUpdateExpense(expense.id, { name: e.target.value });
+                            }
+                          }}
+                          className="bg-transparent text-sm font-bold text-white focus:outline-none focus:border-b focus:border-pink-400 border-b border-transparent transition-colors px-0 py-0.5 truncate w-full"
+                          placeholder="Nome da despesa..."
+                        />
+                        {!hideItemNames && (
+                          <Pencil className="w-3 h-3 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        {expense.category && (
+                          <span className="text-[11px] text-neutral-400 font-medium truncate">
+                            {expense.category}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-neutral-500 font-mono">
+                          · Dia {expense.dueDateDay || 10}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  {expense.installmentNote && (
-                    <p className="text-[11px] text-neutral-400 leading-tight">
-                      {expense.installmentNote}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleDeleteExpense(expense)}
+                      className="text-neutral-500 hover:text-rose-400 p-1 rounded transition-colors cursor-pointer"
+                      title="Excluir Despesa"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              {/* Postponed Alert Notice if active */}
-              {isPostponed && (
-                <div className="p-2 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5 text-indigo-300 font-semibold text-[11px]">
-                    <CalendarClock className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Adiado para o Próximo Mês</span>
+                {/* Installment Info Banner */}
+                {isInstallment && (
+                  <div className="p-2.5 rounded-lg bg-[#0F1115] border border-amber-500/25 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        Parcela {expense.currentInstallment || 1} de {expense.totalInstallments || 7}
+                      </span>
+                      <span className="font-mono text-neutral-300 text-[11px]">
+                        Restam: <strong className="text-white">{remainingInstallments}x</strong>
+                      </span>
+                    </div>
+
+                    {expense.installmentNote && (
+                      <p className="text-[11px] text-neutral-400 leading-tight">
+                        {expense.installmentNote}
+                      </p>
+                    )}
                   </div>
+                )}
+
+                {/* Postponed Alert Notice if active */}
+                {isPostponed && (
+                  <div className="p-2 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 text-indigo-300 font-semibold text-[11px]">
+                      <CalendarClock className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Adiado para o Próximo Mês</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePostpone(expense)}
+                      className="text-[10px] text-indigo-200 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Undo2 className="w-3 h-3" />
+                      Desfazer
+                    </button>
+                  </div>
+                )}
+
+                {/* Direct Numeric Input Row */}
+                <div className="flex items-center justify-between gap-3 bg-[#0F1115] rounded-lg px-3 py-2 border border-white/[0.08]">
+                  <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                    <DollarSign className="w-3.5 h-3.5 text-pink-400" />
+                    <span>Desembolso Ativo:</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono text-neutral-400">R$</span>
+                    {isPrivacyMode ? (
+                      <span className="text-right font-mono font-bold text-white text-base w-32 tabular-nums select-none privacy-masked-text">
+                        ••••••
+                      </span>
+                    ) : (
+                      <input
+                        type="number"
+                        min={0}
+                        max={expense.maxAmount * 2}
+                        step={50}
+                        value={expense.amount}
+                        disabled={isPostponed}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          onUpdateExpense(expense.id, {
+                            amount: val,
+                            maxAmount: Math.max(expense.maxAmount, val),
+                          });
+                        }}
+                        className={`bg-transparent text-right font-mono font-bold text-base focus:outline-none w-32 tabular-nums ${
+                          isPostponed ? 'text-neutral-500 line-through' : 'text-white'
+                        }`}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Slider (Range Input) */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-mono text-neutral-400">
+                    <span>{isPrivacyMode ? 'R$ ••' : 'R$ 0'}</span>
+                    <span className="text-neutral-300">
+                      Máx: {isPrivacyMode ? 'R$ ••••' : formatBRL(expense.maxAmount)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={expense.maxAmount}
+                    step={50}
+                    value={expense.amount}
+                    disabled={isPostponed || isPrivacyMode}
+                    onChange={(e) =>
+                      onUpdateExpense(expense.id, { amount: Number(e.target.value) })
+                    }
+                    className={`w-full ${isPrivacyMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    style={{
+                      accentColor: expense.color,
+                    }}
+                  />
+                </div>
+
+                {/* Animated Toggles: Pago/Não Pago & Postpone Button */}
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.06]">
+                  {/* 1. Toggle Pago / Não Pago no Mês */}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMonthlyStatus(expense)}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      isPaid
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 ring-1 ring-emerald-500/30'
+                        : 'bg-white/5 text-neutral-400 border-white/5 hover:text-white'
+                    }`}
+                    title="Marcar como Pago no mês corrente"
+                  >
+                    <CheckCircle2 className={`w-3.5 h-3.5 ${isPaid ? 'text-emerald-400' : 'text-neutral-500'}`} />
+                    <span>{isPaid ? 'Pago no Mês' : 'Pendente'}</span>
+                  </button>
+
+                  {/* 2. Botão de Adiar Parcela para o Próximo Mês */}
                   <button
                     type="button"
                     onClick={() => handleTogglePostpone(expense)}
-                    className="text-[10px] text-indigo-200 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
+                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      isPostponed
+                        ? 'bg-indigo-500/25 text-indigo-200 border-indigo-500/50 font-bold'
+                        : 'bg-white/5 text-neutral-300 border-white/5 hover:bg-white/10 hover:text-white'
+                    }`}
+                    title="Zerar parcela no mês atual e empurrar o valor para o mês seguinte"
                   >
-                    <Undo2 className="w-3 h-3" />
-                    Desfazer
+                    <CalendarClock className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{isPostponed ? 'Adiado' : 'Adiar Parcela'}</span>
                   </button>
                 </div>
-              )}
 
-              {/* Direct Numeric Input Row */}
-              <div className="flex items-center justify-between gap-3 bg-[#0F1115] rounded-lg px-3 py-2 border border-white/[0.08]">
-                <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-                  <DollarSign className="w-3.5 h-3.5 text-pink-400" />
-                  <span>Desembolso Ativo:</span>
+                {/* Bottom Actions: Receipt Link + Configurar Parcela & Juros Button */}
+                <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] text-[10px] text-neutral-400">
+                  <div className="flex items-center gap-2">
+                    {expense.attachmentUrl ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewAttachment({
+                            url: expense.attachmentUrl!,
+                            title: expense.name,
+                          })
+                        }
+                        className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-mono cursor-pointer bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30"
+                        title="Ver Comprovante Anexado"
+                      >
+                        <Paperclip className="w-3 h-3" />
+                        <span>Comprovante</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerUpload(expense.id)}
+                        className="text-[10px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1 font-mono cursor-pointer"
+                        title="Anexar Comprovante ou Foto"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>+ Anexo</span>
+                      </button>
+                    )}
+                    <span className="font-mono hidden sm:inline">
+                      {formatPercent(pctOfIncome)}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDetail(expense)}
+                    className="text-[11px] text-sky-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 transition-all shadow-sm"
+                    title="Abrir modal para configurar parcelamento, juros e histórico detalhado"
+                  >
+                    <Sliders className="w-3 h-3 text-sky-400" />
+                    <span>Configurar & Juros</span>
+                  </button>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-mono text-neutral-400">R$</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={expense.maxAmount * 2}
-                    step={50}
-                    value={expense.amount}
-                    disabled={isPostponed}
-                    onChange={(e) => {
-                      const val = Math.max(0, Number(e.target.value) || 0);
-                      onUpdateExpense(expense.id, {
-                        amount: val,
-                        maxAmount: Math.max(expense.maxAmount, val),
-                      });
-                    }}
-                    className={`bg-transparent text-right font-mono font-bold text-base focus:outline-none w-32 tabular-nums ${
-                      isPostponed ? 'text-neutral-500 line-through' : 'text-white'
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* VIEW 2: TABLE MODE (Lista Compacta) */}
+      {viewMode === 'table' && (
+        <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#0F1115]/90">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-white/10 bg-white/5 text-neutral-400 font-mono text-[11px]">
+                <th className="p-3">Status / Vencimento</th>
+                <th className="p-3">Despesa / Categoria</th>
+                <th className="p-3">Tipo / Parcela</th>
+                <th className="p-3 text-right">Desembolso (Mês)</th>
+                <th className="p-3 text-center">Status Mês</th>
+                <th className="p-3 text-center">Urgência</th>
+                <th className="p-3 text-center">Comprovante</th>
+                <th className="p-3 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.06]">
+              {filteredAndSortedExpenses.map((expense) => {
+                const isInstallment = expense.paymentType === 'installment';
+                const isPaid = expense.monthlyStatus === 'paid';
+                const isPostponed = !!expense.isPostponed;
+                const dateEval = evaluateDueDate(expense.dueDateDay || 10, expense.monthlyStatus);
+                const isOverdue = dateEval.status === 'overdue' && !isPaid;
+
+                return (
+                  <tr
+                    key={expense.id}
+                    className={`hover:bg-white/5 transition-colors ${
+                      isOverdue ? 'bg-rose-500/5' : isPaid ? 'bg-emerald-500/5' : ''
                     }`}
-                  />
-                </div>
-              </div>
+                  >
+                    {/* 1. Status / Vencimento */}
+                    <td className="p-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${dateEval.colorClass.dot}`} />
+                        <span className="font-mono text-[11px] text-neutral-300">
+                          Dia {expense.dueDateDay || 10}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${dateEval.colorClass.badge}`}>
+                          {dateEval.label}
+                        </span>
+                      </div>
+                    </td>
 
-              {/* Slider (Range Input) */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[11px] font-mono text-neutral-400">
-                  <span>R$ 0</span>
-                  <span className="text-neutral-300">
-                    Máx: {formatBRL(expense.maxAmount)}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={expense.maxAmount}
-                  step={50}
-                  value={expense.amount}
-                  disabled={isPostponed}
-                  onChange={(e) =>
-                    onUpdateExpense(expense.id, { amount: Number(e.target.value) })
-                  }
-                  className="w-full"
-                  style={{
-                    accentColor: expense.color,
-                  }}
-                />
-              </div>
+                    {/* 2. Nome / Categoria */}
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: expense.color }}
+                        />
+                        <div>
+                          <p className="font-bold text-white text-xs">
+                            {hideItemNames ? maskName(expense.name, true) : expense.name}
+                          </p>
+                          <p className="text-[10px] text-neutral-400">{expense.category || 'Geral'}</p>
+                        </div>
+                      </div>
+                    </td>
 
-              {/* Animated Toggles: Pago/Não Pago & Postpone Button */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.06]">
-                {/* 1. Toggle Pago / Não Pago no Mês */}
-                <button
-                  type="button"
-                  onClick={() => handleToggleMonthlyStatus(expense)}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    isPaid
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 ring-1 ring-emerald-500/30'
-                      : 'bg-white/5 text-neutral-400 border-white/5 hover:text-white'
-                  }`}
-                  title="Marcar como Pago no mês corrente"
-                >
-                  <CheckCircle2 className={`w-3.5 h-3.5 ${isPaid ? 'text-emerald-400' : 'text-neutral-500'}`} />
-                  <span>{isPaid ? 'Pago no Mês' : 'Pendente'}</span>
-                </button>
+                    {/* 3. Tipo / Parcela */}
+                    <td className="p-3 whitespace-nowrap font-mono text-[11px]">
+                      {isInstallment ? (
+                        <span className="text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          {expense.currentInstallment || 1}/{expense.totalInstallments || 7}x
+                        </span>
+                      ) : (
+                        <span className="text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          Fixa
+                        </span>
+                      )}
+                    </td>
 
-                {/* 2. Botão de Adiar Parcela para o Próximo Mês */}
-                <button
-                  type="button"
-                  onClick={() => handleTogglePostpone(expense)}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    isPostponed
-                      ? 'bg-indigo-500/25 text-indigo-200 border-indigo-500/50 font-bold'
-                      : 'bg-white/5 text-neutral-300 border-white/5 hover:bg-white/10 hover:text-white'
-                  }`}
-                  title="Zerar parcela no mês atual e empurrar o valor para o mês seguinte"
-                >
-                  <CalendarClock className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>{isPostponed ? 'Adiado' : 'Adiar Parcela'}</span>
-                </button>
-              </div>
+                    {/* 4. Desembolso Mês */}
+                    <td className="p-3 text-right font-mono font-bold whitespace-nowrap">
+                      <span className={isPostponed ? 'line-through text-neutral-500' : 'text-white'}>
+                        {isPrivacyMode ? 'R$ ••••••' : formatBRL(expense.amount)}
+                      </span>
+                    </td>
 
-              {/* Bottom Actions: Configurar Parcela & Juros Button */}
-              <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] text-[10px] text-neutral-400">
-                <span className="font-mono">
-                  {formatPercent(pctOfIncome)} da receita
-                </span>
+                    {/* 5. Status Mês */}
+                    <td className="p-3 text-center whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMonthlyStatus(expense)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-colors cursor-pointer inline-flex items-center gap-1 ${
+                          isPaid
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-white/5 text-neutral-400 border-white/10 hover:text-white'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>{isPaid ? 'Pago' : 'Pendente'}</span>
+                      </button>
+                    </td>
 
-                <button
-                  type="button"
-                  onClick={() => handleOpenDetail(expense)}
-                  className="text-[11px] text-sky-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 transition-all shadow-sm"
-                  title="Abrir modal para configurar parcelamento, juros e histórico detalhado"
-                >
-                  <Sliders className="w-3 h-3 text-sky-400" />
-                  <span>Configurar & Juros</span>
-                </button>
-              </div>
+                    {/* 6. Urgência */}
+                    <td className="p-3 text-center whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => handleCyclePriority(expense)}
+                        className="text-[11px] font-bold px-2 py-0.5 rounded-full border transition-colors cursor-pointer"
+                      >
+                        {expense.priority === 'high'
+                          ? '🔴 Alta'
+                          : expense.priority === 'medium'
+                          ? '🟡 Média'
+                          : '🟢 Baixa'}
+                      </button>
+                    </td>
+
+                    {/* 7. Comprovante */}
+                    <td className="p-3 text-center whitespace-nowrap">
+                      {expense.attachmentUrl ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewAttachment({
+                              url: expense.attachmentUrl!,
+                              title: expense.name,
+                            })
+                          }
+                          className="p-1 rounded text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 cursor-pointer inline-flex items-center gap-1 text-[11px]"
+                          title="Ver comprovante"
+                        >
+                          <Paperclip className="w-3 h-3" />
+                          <span>Ver</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleTriggerUpload(expense.id)}
+                          className="p-1 rounded text-neutral-500 hover:text-neutral-300 cursor-pointer inline-flex items-center gap-1 text-[10px]"
+                          title="Anexar comprovante"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>+ Anexar</span>
+                        </button>
+                      )}
+                    </td>
+
+                    {/* 8. Ações */}
+                    <td className="p-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePostpone(expense)}
+                          className={`p-1.5 rounded text-xs font-semibold cursor-pointer border ${
+                            isPostponed
+                              ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                              : 'bg-white/5 text-neutral-400 border-white/5 hover:text-white'
+                          }`}
+                          title="Adiar para o próximo mês"
+                        >
+                          <CalendarClock className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDetail(expense)}
+                          className="p-1.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 hover:bg-sky-500/25 cursor-pointer"
+                          title="Configurar parcelas e juros"
+                        >
+                          <Sliders className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExpense(expense)}
+                          className="p-1.5 rounded text-neutral-500 hover:text-rose-400 cursor-pointer"
+                          title="Excluir despesa"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* VIEW 3: DESKTOP PC ICONS MODE (Visualização organizada como lista de ícones estilo PC) */}
+      {viewMode === 'icons' && (
+        <div className="rounded-2xl glass-surface specular-top-light border border-white/10 p-4 sm:p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/10 text-xs">
+            <div className="flex items-center gap-2">
+              <AppWindow className="w-4 h-4 text-sky-400" />
+              <span className="font-bold text-white uppercase tracking-wider font-mono">
+                Visualização em Ícones do PC (Estilo Desktop Grid)
+              </span>
+              <span className="text-[11px] font-mono text-neutral-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
+                {filteredAndSortedExpenses.length} itens organizados
+              </span>
             </div>
-          );
-        })}
-      </div>
+            <p className="text-[11px] text-neutral-400">
+              Clique no ícone para gerenciar ou no botão rápido para marcar pago.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {filteredAndSortedExpenses.map((expense) => {
+              const isPaid = expense.monthlyStatus === 'paid';
+              const isInstallment = expense.paymentType === 'installment';
+              const dateEval = evaluateDueDate(expense.dueDateDay || 10, expense.monthlyStatus);
+
+              return (
+                <div
+                  key={expense.id}
+                  onClick={() => handleOpenDetail(expense)}
+                  className={`group relative rounded-xl border p-3 flex flex-col items-center text-center justify-between transition-all duration-200 cursor-pointer select-none hover:scale-[1.03] hover:shadow-xl ${
+                    isPaid
+                      ? 'bg-emerald-950/20 border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-500/10'
+                      : dateEval.status === 'overdue'
+                      ? 'bg-rose-950/25 border-rose-500/40 hover:border-rose-400 hover:bg-rose-500/15'
+                      : 'bg-[#101319]/90 border-white/10 hover:border-sky-400/50 hover:bg-sky-500/10'
+                  }`}
+                  title={`${expense.name} • Clique para ver detalhes`}
+                >
+                  {/* Status Indicator Pin */}
+                  <div className="absolute top-2 right-2 flex items-center gap-1">
+                    {expense.attachmentUrl && (
+                      <span className="p-0.5 rounded bg-emerald-500/20 text-emerald-400" title="Comprovante anexado">
+                        <Paperclip className="w-3 h-3" />
+                      </span>
+                    )}
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        isPaid
+                          ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                          : dateEval.status === 'overdue'
+                          ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)] animate-pulse'
+                          : 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Desktop PC Icon Illustration */}
+                  <div className="my-2 relative flex items-center justify-center">
+                    <div
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg border transition-transform group-hover:scale-110"
+                      style={{
+                        backgroundColor: `${expense.color}25`,
+                        borderColor: `${expense.color}60`,
+                        boxShadow: `0 8px 16px ${expense.color}20`,
+                      }}
+                    >
+                      {isInstallment ? (
+                        <Layers className="w-6 h-6" style={{ color: expense.color }} />
+                      ) : (
+                        <CreditCard className="w-6 h-6" style={{ color: expense.color }} />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Icon Label / Name */}
+                  <div className="w-full space-y-0.5">
+                    <p className="text-xs font-bold text-white truncate max-w-full group-hover:text-sky-300 transition-colors">
+                      {hideItemNames ? maskName(expense.name, true) : expense.name}
+                    </p>
+                    <p className="text-[10px] text-neutral-400 truncate">
+                      {expense.category || 'Geral'}
+                    </p>
+                  </div>
+
+                  {/* Price Tag */}
+                  <div className="w-full mt-2 pt-2 border-t border-white/10 space-y-1">
+                    <span className="text-xs font-bold font-mono text-white block">
+                      {isPrivacyMode ? 'R$ ••••••' : formatBRL(expense.amount)}
+                    </span>
+                    <span className="text-[10px] font-mono text-neutral-400 block">
+                      {isInstallment
+                        ? `${expense.currentInstallment || 1}/${expense.totalInstallments || 7}x`
+                        : `Dia ${expense.dueDateDay || 10}`}
+                    </span>
+                  </div>
+
+                  {/* 1-Click Status Badge */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleMonthlyStatus(expense);
+                    }}
+                    className={`mt-2 w-full py-1 rounded-md text-[10px] font-bold border transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                      isPaid
+                        ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/35'
+                        : 'bg-white/5 text-neutral-400 border-white/10 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    <span>{isPaid ? 'Pago' : 'Pendente'}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* FULL SCREEN RECEIPT PREVIEW MODAL */}
+      {previewAttachment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative max-w-2xl w-full bg-[#13161C] border border-white/20 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Paperclip className="w-4 h-4 text-emerald-400" />
+                <h4 className="text-sm font-bold text-white">Comprovante: {previewAttachment.title}</h4>
+              </div>
+              <button
+                onClick={() => setPreviewAttachment(null)}
+                className="text-neutral-400 hover:text-white p-1 rounded cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex justify-center items-center bg-black/60 rounded-xl p-2 max-h-[70vh] overflow-hidden border border-white/5">
+              <img
+                src={previewAttachment.url}
+                alt={previewAttachment.title}
+                className="max-h-[65vh] max-w-full object-contain rounded-lg shadow-lg"
+              />
+            </div>
+            <div className="flex items-center justify-between pt-2 text-xs text-neutral-400">
+              <span>Anexo do lançamento</span>
+              <button
+                onClick={() => setPreviewAttachment(null)}
+                className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {filteredAndSortedExpenses.length === 0 && (
         <div className="py-12 text-center text-neutral-400 text-sm">

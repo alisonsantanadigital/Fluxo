@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "FamilyFinance": {
+      "title": "FamilyFinance",
+      "description": "Shared household financial ledger containing real-time cash, realized incomes, micro expenses, and future incomes synchronized between spouses and devices",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the family finance vault"
+        },
+        "householdName": {
+          "type": "string",
+          "description": "Household display name"
+        },
+        "incomes": {
+          "type": "array",
+          "description": "List of active income sources"
+        },
+        "expenses": {
+          "type": "array",
+          "description": "List of fixed and installment expenses"
+        },
+        "futureIncomes": {
+          "type": "array",
+          "description": "List of projected future inflows and scheduled receipts"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated ISO timestamp"
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Name or identifier of person who performed the last change"
+        }
+      },
+      "required": ["id", "householdName"]
+    }
+  },
+  "firestore": {
+    "/family_finances/{householdId}": {
+      "schema": "FamilyFinance",
+      "description": "Master synchronization document for the shared family financial vault accessed by spouses across any device"
+    },
+    "/test/connection": {
+      "schema": "FamilyFinance",
+      "description": "Health check document to validate live Firestore connectivity upon startup"
+    }
+  }
+}
